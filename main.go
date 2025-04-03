@@ -12,6 +12,9 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+	"flag"
+	"os"
+	"fmt"
 )
 
 type Subscription struct {
@@ -30,10 +33,12 @@ type Message struct {
 	Data       string `json:"data"`
 }
 
-const (
-	heartbeatInterval = 10 * time.Second
-	tunnelId          = "2f5a6361-20df-462a-805f-15ae2d880ae3"
-	bearerToken       = "Bearer 12a7W55yRGKmjSvo6zmyK2P6cHkoB1kMipS8"
+var (
+	heartbeatInterval time.Duration
+	reconnectInterval time.Duration
+	bearerToken string
+	tunnelId string
+	isDevMode bool
 )
 
 func executeCommand(command string) {
@@ -64,7 +69,7 @@ func handleWelcome() {
 }
 
 func handleRejectSubscription() {
-	log.Printf("Connection to tunnel is refused. (Notice: check your token/uuid.)")
+	log.Printf("Connection to tunnel is refused. (Notice: check your token/tunnelId.)")
 }
 
 func handleConfirmSubscription(msg map[string]interface{}) {
@@ -175,7 +180,7 @@ func connectWebSocket() (*websocket.Conn, error) {
 	u := url.URL{Scheme: "ws", Host: "localhost:3000", Path: "/cable"}
 	headers := http.Header{}
 	headers.Add("Origin", "http://localhost:3000")
-	headers.Add("Authorization", bearerToken)
+	headers.Add("Authorization", fmt.Sprintf("Bearer %s", bearerToken))
 
 	log.Printf("Connecting to %s", u.String())
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), headers)
@@ -213,12 +218,9 @@ func listenForMessages(c *websocket.Conn, msgCh chan string, exitSig *bool) {
 			*exitSig = false
 			continue
 		} else if action == "reconnect" {
-			log.Println("Reconnecting in a few seconds...")
-			time.Sleep(time.Duration(rand.Intn(10)+1) * time.Second)
 			msgCh <- "reconnect"
 			return
 		} else if action == "disconnect" {
-			log.Println("Will disconnected from websocket.")
 			msgCh <- "disconnect"
 			return
 		} else {
@@ -230,7 +232,6 @@ func listenForMessages(c *websocket.Conn, msgCh chan string, exitSig *bool) {
 }
 
 func sendHeartbeats(c *websocket.Conn, exitSig *bool) {
-	time.Sleep(3 * time.Second)
 	identifier, _ := json.Marshal(Identifier{Channel: "CommandChannel", Tunnel: tunnelId})
 	heartbeat := Message{
 		Command:    "message",
@@ -240,8 +241,9 @@ func sendHeartbeats(c *websocket.Conn, exitSig *bool) {
 	heartbeatMsg, _ := json.Marshal(heartbeat)
 
 	for {
+		time.Sleep(heartbeatInterval)
 		if *exitSig == true {
-			log.Println("Exiting heartbeat because exit signal is true.")
+			log.Println("Exiting heartbeat because from stale connection.")
 			return
 		}
 		if err := c.WriteMessage(websocket.TextMessage, heartbeatMsg); err != nil {
@@ -249,16 +251,15 @@ func sendHeartbeats(c *websocket.Conn, exitSig *bool) {
 			return
 		}
 		log.Println("Sent heartbeat ping.")
-		time.Sleep(5 * time.Second)
 	}
 }
 
-func main() {
+func startApp() {
 	for {
 		c, err := connectWebSocket()
 		if err != nil {
 			log.Printf("Connection error: %v.\nReconnecting in 5 seconds...", err)
-			time.Sleep(time.Duration(5) * time.Second)
+			time.Sleep(reconnectInterval)
 			continue
 		}
 
@@ -280,13 +281,58 @@ func main() {
 			close(msgCh)
 			if action == "reconnect" {
 				log.Println("Reconnecting in a few seconds...")
+				time.Sleep(time.Duration(rand.Intn(10)+1) * time.Second)
 				continue
 			}
 			if action == "disconnect" {
-				log.Println("Disconnected from websocket.")
+				log.Println("Disconnecting.")
 				return
 			}
 		}
 	}
+}
+
+func parseAndSetFlags() {
+	c := flag.String("c", "", "(Required) Input in the format token:tunnelId")
+	d := flag.Bool("d", false, "Enable development mode")
+
+	flag.Usage = func() {
+		fmt.Println("Usage:")
+		fmt.Println("  -c string (Required) Input in the format token:tunnelId (separated by a colon), such as `birdcmd -c 12a7W55y(your token):ffe9-eew3(your tunnelId)`")
+		fmt.Println("  -d        Enable development mode (optional)")
+		os.Exit(1)
+	}
+
+	flag.Parse()
+
+	// Ensure -c flag is provided
+	if *c == "" {
+		fmt.Println("Error: -c flag is required")
+		flag.Usage()
+	}
+
+	parts := strings.SplitN(*c, ":", 2)
+	if len(parts) == 2 {
+		bearerToken = parts[0]
+		tunnelId = parts[1]
+	} else {
+		log.Println("Error: -c flag must be in format token:tunnelId")
+		os.Exit(1)
+	}
+
+	isDevMode = *d
+
+	if isDevMode {
+		heartbeatInterval = time.Duration(5) * time.Second
+		reconnectInterval = time.Duration(2) * time.Second
+	} else {
+		heartbeatInterval = time.Duration(45) * time.Second
+		reconnectInterval = time.Duration(10) * time.Second
+	}
+}
+
+func main() {
+	parseAndSetFlags()
+	startApp()
 	log.Println("Exited.")
 }
