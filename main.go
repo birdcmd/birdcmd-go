@@ -39,6 +39,10 @@ var (
 	bearerToken string
 	tunnelId string
 	isDevMode bool
+	useCnServer bool
+	wsScheme string
+	hostServer string
+	wsOrigin string
 )
 
 func executeCommand(command string) {
@@ -178,9 +182,8 @@ func handleWsMessage(c *websocket.Conn, msg []byte) string {
 }
 
 func connectWebSocket() (*websocket.Conn, error) {
-	u := url.URL{Scheme: "ws", Host: "localhost:3000", Path: "/cable"}
+	u := url.URL{Scheme: wsScheme, Host: hostServer, Path: "/cable"}
 	headers := http.Header{}
-	headers.Add("Origin", "http://localhost:3000")
 	headers.Add("Authorization", fmt.Sprintf("Bearer %s", bearerToken))
 
 	log.Printf("Connecting to %s", u.String())
@@ -251,7 +254,9 @@ func sendHeartbeats(c *websocket.Conn, exitSig *bool) {
 			log.Println("Heartbeat send error:", err, "Stopping heartbeats.")
 			return
 		}
-		log.Println("Sent heartbeat ping.")
+		if isDevMode {
+			log.Println("Sent heartbeat ping.")
+		}
 	}
 }
 
@@ -296,11 +301,13 @@ func startApp() {
 func parseAndSetFlags() {
 	c := flag.String("c", "", "(Required) Input in the format token:tunnelId")
 	d := flag.Bool("d", false, "Enable development mode")
+	cn := flag.Bool("cn", false, "Use China mainland server")
 
 	flag.Usage = func() {
 		fmt.Println("Usage:")
 		fmt.Println("  -c string (Required) Input in the format token:tunnelId (separated by a colon), such as `birdcmd -c 12a7W55y(your token):ffe9-eew3(your tunnelId)`")
 		fmt.Println("  -d        Enable development mode (optional)")
+		fmt.Println("  -cn       Use China mainland server (developer experimental)")
 		os.Exit(1)
 	}
 
@@ -322,13 +329,23 @@ func parseAndSetFlags() {
 	}
 
 	isDevMode = *d
+	useCnServer = *cn
 
 	if isDevMode {
 		heartbeatInterval = time.Duration(5) * time.Second
 		reconnectInterval = time.Duration(2) * time.Second
+		wsScheme = "ws"
+		hostServer = "localhost:3000"
 	} else {
 		heartbeatInterval = time.Duration(45) * time.Second
 		reconnectInterval = time.Duration(10) * time.Second
+		if useCnServer {
+			hostServer = "bird.gfgf.work"
+		} else {
+			hostServer = "www.birdcmd.com"
+		}
+		wsOrigin = fmt.Sprintf("https://%s", hostServer)
+		wsScheme = "wss"
 	}
 }
 
