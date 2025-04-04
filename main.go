@@ -46,7 +46,8 @@ func executeCommand(command string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "sh", "-c", command)
-
+	cmd.Env = os.Environ()
+	
 	var output bytes.Buffer
 	cmd.Stdout = &output
 	cmd.Stderr = &output
