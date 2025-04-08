@@ -337,7 +337,7 @@ func parseAndSetFlags() {
 	useCnServer = *cn
 
 	if isDevMode {
-		heartbeatInterval = time.Duration(5) * time.Second
+		heartbeatInterval = time.Duration(25) * time.Second
 		reconnectInterval = time.Duration(2) * time.Second
 		wsScheme = "ws"
 		hostServer = "localhost:3000"
