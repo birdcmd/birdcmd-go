@@ -136,8 +136,13 @@ func handleMessage(msg map[string]interface{}) {
 
 	cmdRaw, exists := message["command"]
 	if !exists {
-		log.Println("Error: Missing 'command' field in 'message'. Full message:", msg)
-		return
+		infoRaw, exists := message["info"]
+		if exists {
+			log.Println("[Info] Server: ", infoRaw)
+		}	else {
+			log.Println("Error: Missing 'command' field in 'message'. Full message:", msg)
+		}
+		return	
 	}
 
 	cmd, ok := cmdRaw.(string)
