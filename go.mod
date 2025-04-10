@@ -1,4 +1,4 @@
-module birdcmd-go
+module github.com/birdcmd/birdcmd-go
 
 go 1.24.1
 
