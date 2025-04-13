@@ -9,8 +9,9 @@ import (
 func listenForMessages(c *websocket.Conn, msgCh chan string, exitSig *bool) {
 	for {
 		_, message, err := c.ReadMessage()
-		*exitSig = true
+
 		if err != nil {
+			*exitSig = true
 			log.Println("Message read error:", err)
 			msgCh <- "reconnect"
 			return
@@ -22,12 +23,15 @@ func listenForMessages(c *websocket.Conn, msgCh chan string, exitSig *bool) {
 			*exitSig = false
 			continue
 		} else if action == "reconnect" {
+			*exitSig = true
 			msgCh <- "reconnect"
 			return
 		} else if action == "disconnect" {
+			*exitSig = true
 			msgCh <- "disconnect"
 			return
 		} else {
+			*exitSig = true
 			log.Println("Unknown action:", action)
 			msgCh <- "disconnect"
 			return
