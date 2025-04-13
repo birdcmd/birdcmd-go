@@ -9,6 +9,9 @@ import (
 	"os"
 	"encoding/json"
 	"log"
+	"syscall"
+
+	"github.com/birdcmd/birdcmd-go/pkg/config/flags"
 )
 
 func handleMessage(msg map[string]interface{}) {
@@ -57,10 +60,21 @@ func handleMessage(msg map[string]interface{}) {
 
 func executeCommand(command string) {
 	// Set a timeout to avoid long-running/hanging commands
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	timeoutSec := 10*time.Second
+	if flags.EnableLongRunning {
+		timeoutSec = 600*time.Second
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec)
 	defer cancel()
+
 	cmd := exec.CommandContext(ctx, "sh", "-c", command)
 	cmd.Env = os.Environ()
+
+	// Make sure to kill the entire process group
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+			Setpgid: true,
+	}
 	
 	var output bytes.Buffer
 	cmd.Stdout = &output

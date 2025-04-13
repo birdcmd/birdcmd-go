@@ -20,11 +20,13 @@ var (
 	WsScheme string
 	HostServer string
 	WsOrigin string
+	EnableLongRunning bool
 )
 
 func ParseAndSetFlags() {
 	c := flag.String("c", "", "(Required) Input in the format token:tunnelId")
 	d := flag.Bool("d", false, "Enable development mode")
+	lr := flag.Bool("lr", false, "Enable long running command to run for up to 600 seconds instead of 10 seconds.")
 	cn := flag.Bool("cn", false, "Use China mainland server")
 	showVersion := flag.Bool("v", false, "Show Version")
 
@@ -32,6 +34,7 @@ func ParseAndSetFlags() {
 		fmt.Println("Usage:")
 		fmt.Println("  -c string (Required) The config of birdcmd in the format token:tunnelId (separated by a colon), such as `birdcmd -c 12a7W55y(your token):ffe9-eew3(your tunnelId)`")
 		fmt.Println("  -v        Show Version")
+		fmt.Println("  -lr       Enable long running command to run for up to 600 seconds instead of 10 seconds.")
 		// fmt.Println("  -d        Enable development mode (optional)")
 		// fmt.Println("  -cn       Use China mainland server (developer experimental)")
 		os.Exit(1)
@@ -61,6 +64,7 @@ func ParseAndSetFlags() {
 
 	IsDevMode = *d
 	UseCnServer = *cn
+	EnableLongRunning = *lr
 
 	if IsDevMode {
 		HeartbeatInterval = time.Duration(25) * time.Second
