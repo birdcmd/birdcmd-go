@@ -20,7 +20,6 @@ builds:
     binary: birdcmd
     goos:
       - linux
-      - windows
       - darwin
     goarch:
       - amd64
