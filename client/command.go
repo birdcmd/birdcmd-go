@@ -2,14 +2,12 @@ package client
 
 import (
 	"bytes"
-	"context"
 	"os/exec"
 	"strings"
 	"time"
 	"os"
 	"encoding/json"
 	"log"
-	"syscall"
 
 	"github.com/birdcmd/birdcmd-go/pkg/config/flags"
 )
@@ -65,26 +63,41 @@ func executeCommand(command string) {
 		timeoutSec = 600*time.Second
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec)
-	defer cancel()
+	log.Println("Running:", command)
 
-	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	cmd := exec.Command("sh", "-c", command)
 	cmd.Env = os.Environ()
-
-	// Make sure to kill the entire process group
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-			Setpgid: true,
-	}
 	
 	var output bytes.Buffer
 	cmd.Stdout = &output
 	cmd.Stderr = &output
-
-	if err := cmd.Run(); err != nil {
-		log.Printf("Error executing command: %v\nOutput: %s", err, strings.TrimSpace(output.String()))
-		return
+	
+	// Start the process
+	if err := cmd.Start(); err != nil {
+			log.Printf("Error starting command: %v", err)
+			return
 	}
 
-	// Log successful command output
+	// Set up a channel for completion
+	done := make(chan error, 1)
+	go func() {
+			done <- cmd.Wait()
+	}()
+	
+	// Wait for completion or timeout
+	select {
+	case err := <-done:
+			if err != nil {
+					log.Printf("Error executing command: %v\nOutput: %s", err, strings.TrimSpace(output.String()))
+					return
+			}
+	case <-time.After(timeoutSec):
+			// Force kill the process
+			if err := cmd.Process.Kill(); err != nil {
+					log.Printf("Error killing process: %v", err)
+			}
+			log.Printf("Command timed out after %s seconds\nPartial output: %s", timeoutSec, strings.TrimSpace(output.String()))
+			return
+	}
 	log.Printf("\n%s", strings.TrimSpace(output.String()))
 }
